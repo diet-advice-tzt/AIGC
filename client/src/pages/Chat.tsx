@@ -1,198 +1,261 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { Input, Button, List, Card, Spin, Empty, Avatar, Tag, message } from 'antd'
-import { SendOutlined, UserOutlined, RobotOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { chatApi } from '../api'
-
-const { TextArea } = Input
+import { useUserStore } from '../store/userStore'
 
 interface Message {
   id: string
   content: string
   role: 'user' | 'assistant'
-  createdAt: string
+  time: string
 }
 
 interface Session {
-  id: string
-  name: string
+  sessionId: string
+  label: string
   createdAt: string
 }
 
+const fmt = (iso: string) =>
+  new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+
 const Chat: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([])
+  const { user } = useUserStore()
+  const userId = String(user?.id ?? '')
+  const initial = user?.username?.charAt(0).toUpperCase() ?? 'U'
+
   const [sessions, setSessions] = useState<Session[]>([])
-  const [currentSession, setCurrentSession] = useState<string>('')
+  const [currentSessionId, setCurrentSessionId] = useState<string>('')
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 自动滚到底部
   useEffect(() => {
-    loadSessions()
-  }, [])
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  const loadSessions = async () => {
+  // 加载历史记录（返回的是 queryRecord，是 List<Map>）
+  const loadHistory = useCallback(async (_sid: string) => {
+    if (!userId) return
     try {
-      const res: any = await chatApi.getSessions()
-      if (res.code === 1 && res.data) {
-        setSessions(res.data)
-        if (res.data.length > 0) {
-          setCurrentSession(res.data[0].id)
-          loadHistory(res.data[0].id)
-        }
+      const res: any = await chatApi.getHistory(userId)
+      if (res.code === 1 && Array.isArray(res.data)) {
+        // 后端返回 Map 列表，每条 map 的 key 视后端实现而定，尝试常见字段
+        const mapped: Message[] = res.data.map((item: any, i: number) => ({
+          id: String(i),
+          content: item.content ?? item.question ?? item.Respond ?? JSON.stringify(item),
+          role: (item.role === 'user' || item.type === 'user') ? 'user' : 'assistant',
+          time: item.createdAt ?? item.create_time ?? new Date().toISOString(),
+        }))
+        setMessages(mapped)
       }
-    } catch (error) {
-      console.error('Load sessions failed')
+    } catch {
+      // 查询历史失败时不影响使用
     }
-  }
+  }, [userId])
 
-  const loadHistory = async (sessionId: string) => {
+  // 首次进入：创建新会话
+  useEffect(() => {
+    if (!userId) return
+    handleNewSession()
+  }, [userId])
+
+  const handleNewSession = async () => {
+    if (!userId) return
     try {
-      const res: any = await chatApi.getHistory(sessionId)
-      if (res.code === 1) {
-        setMessages(res.data || [])
+      const res: any = await chatApi.newSession(userId)
+      if (res.code === 1 && res.data?.SessionId) {
+        const sid: string = res.data.SessionId
+        const newSession: Session = {
+          sessionId: sid,
+          label: `对话 ${sessions.length + 1}`,
+          createdAt: new Date().toISOString(),
+        }
+        setSessions((prev) => [newSession, ...prev])
+        setCurrentSessionId(sid)
+        setMessages([])
       }
-    } catch (error) {
-      console.error('Load history failed')
+    } catch {
+      // 后端未启动时忽略
     }
   }
 
   const handleSend = async () => {
-    if (!input.trim() || loading) return
+    const text = input.trim()
+    if (!text || loading) return
 
-    const userMessage: Message = {
+    const userMsg: Message = {
       id: Date.now().toString(),
-      content: input,
+      content: text,
       role: 'user',
-      createdAt: new Date().toISOString(),
+      time: new Date().toISOString(),
     }
-
-    setMessages((prev) => [...prev, userMessage])
+    setMessages((prev) => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
+    // 重置 textarea 高度
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+
     try {
       const res: any = await chatApi.sendMessage({
-        sessionId: currentSession,
-        content: input,
+        question: text,
+        userId,
+        sessionId: currentSessionId,
       })
 
       if (res.code === 1) {
-        const aiMessage: Message = {
+        const respond = res.data?.Respond ?? res.data?.content ?? ''
+        const aiMsg: Message = {
           id: Date.now().toString() + 'ai',
-          content: res.data.content,
+          content: respond,
           role: 'assistant',
-          createdAt: new Date().toISOString(),
+          time: new Date().toISOString(),
         }
-        setMessages((prev) => [...prev, aiMessage])
+        setMessages((prev) => [...prev, aiMsg])
       } else {
-        message.error(res.msg || '发送失败')
+        setMessages((prev) => [...prev, {
+          id: Date.now().toString() + 'err',
+          content: res.msg ?? '请求失败，请重试',
+          role: 'assistant',
+          time: new Date().toISOString(),
+        }])
       }
-    } catch (error) {
-      message.error('网络错误，请重试')
+    } catch {
+      setMessages((prev) => [...prev, {
+        id: Date.now().toString() + 'err',
+        content: '网络错误，请检查后端连接',
+        role: 'assistant',
+        time: new Date().toISOString(),
+      }])
     } finally {
       setLoading(false)
     }
   }
 
-  const createNewSession = () => {
-    const newId = Date.now().toString()
-    setCurrentSession(newId)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    // 自动撑高
+    e.target.style.height = 'auto'
+    e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
+  }
+
+  const switchSession = (sid: string) => {
+    setCurrentSessionId(sid)
     setMessages([])
-    setSessions((prev) => [
-      { id: newId, name: '新对话', createdAt: new Date().toISOString() },
-      ...prev,
-    ])
+    loadHistory(sid)
   }
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 140px)', gap: 16 }}>
-      <Card
-        style={{ width: 240, flexShrink: 0 }}
-        title="对话列表"
-        extra={
-          <Button type="text" icon={<PlusOutlined />} onClick={createNewSession}>
-            新建
-          </Button>
-        }
-        bodyStyle={{ padding: 0 }}
-      >
-        <List
-          dataSource={sessions}
-          renderItem={(item) => (
-            <List.Item
-              style={{
-                cursor: 'pointer',
-                padding: '12px 16px',
-                background: currentSession === item.id ? '#e6f7ff' : 'transparent',
-                borderBottom: '1px solid #f0f0f0',
-              }}
-              onClick={() => {
-                setCurrentSession(item.id)
-                loadHistory(item.id)
-              }}
-              actions={[
-                <Button type="text" danger icon={<DeleteOutlined />} size="small" />,
-              ]}
-            >
-              <List.Item.Meta
-                avatar={<Avatar icon={<RobotOutlined />} />}
-                title={item.name}
-                description={new Date(item.createdAt).toLocaleDateString()}
-              />
-            </List.Item>
+    <div className="chat-layout" style={{ margin: '-28px', height: 'calc(100vh - 56px)' }}>
+      {/* Session Sidebar */}
+      <div className="chat-sidebar">
+        <div className="chat-sidebar-header">
+          <span className="chat-sidebar-title">对话</span>
+          <button
+            className="new-chat-btn"
+            onClick={handleNewSession}
+            title="新建对话"
+          >
+            +
+          </button>
+        </div>
+        <div className="session-list">
+          {sessions.length === 0 && (
+            <div style={{ padding: '20px 12px', fontSize: 13, color: 'var(--text-mute)', textAlign: 'center' }}>
+              点击 + 开始新对话
+            </div>
           )}
-        />
-      </Card>
+          {sessions.map((s) => (
+            <div
+              key={s.sessionId}
+              className={`session-item ${currentSessionId === s.sessionId ? 'active' : ''}`}
+              onClick={() => switchSession(s.sessionId)}
+            >
+              <div className="session-item-name">{s.label}</div>
+              <div className="session-item-meta">{fmt(s.createdAt)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <Card style={{ flex: 1, display: 'flex', flexDirection: 'column' }} bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 0 }}>
-        <div className="chat-messages">
-          {messages.length === 0 ? (
-            <Empty description="开始和 AI 对话吧" />
+      {/* Chat Main */}
+      <div className="chat-main">
+        <div className="chat-messages-area">
+          {messages.length === 0 && !loading ? (
+            <div className="chat-empty">
+              <div className="chat-empty-icon">💬</div>
+              <div className="chat-empty-text">和 AI 开始对话</div>
+              <div className="chat-empty-hint">输入任何问题，AI 会给你运动建议</div>
+            </div>
           ) : (
             messages.map((msg) => (
-              <div key={msg.id} className={`message-item ${msg.role}`}>
-                <Avatar icon={msg.role === 'user' ? <UserOutlined /> : <RobotOutlined />} style={{ margin: '0 8px' }} />
-                <div className="message-content">
-                  {msg.role === 'assistant' && <Tag color="blue">AI</Tag>}
-                  <p>{msg.content}</p>
-                  <small style={{ opacity: 0.6 }}>
-                    {new Date(msg.createdAt).toLocaleTimeString()}
-                  </small>
+              <div key={msg.id} className={`msg-row ${msg.role}`}>
+                <div className={`msg-avatar ${msg.role === 'assistant' ? 'ai' : 'user-av'}`}>
+                  {msg.role === 'assistant' ? 'AI' : initial}
+                </div>
+                <div>
+                  <div className="msg-bubble">{msg.content}</div>
+                  <div className="msg-time">{fmt(msg.time)}</div>
                 </div>
               </div>
             ))
           )}
+
           {loading && (
-            <div className="message-item">
-              <Avatar icon={<RobotOutlined />} style={{ margin: '0 8px' }} />
-              <div className="message-content">
-                <Spin size="small" /> AI 正在思考...
+            <div className="msg-row">
+              <div className="msg-avatar ai">AI</div>
+              <div>
+                <div className="msg-bubble" style={{ padding: '14px 16px' }}>
+                  <div className="typing-indicator">
+                    <div className="typing-dot" />
+                    <div className="typing-dot" />
+                    <div className="typing-dot" />
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+          <div ref={bottomRef} />
         </div>
 
-        <div style={{ padding: 16, borderTop: '1px solid #f0f0f0' }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <TextArea
+        {/* Input */}
+        <div className="chat-input-area">
+          <div className="chat-input-box">
+            <textarea
+              ref={textareaRef}
+              className="chat-textarea"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-              placeholder="输入消息..."
-              rows={2}
+              onChange={handleTextareaInput}
+              onKeyDown={handleKeyDown}
+              placeholder="输入消息，Enter 发送，Shift+Enter 换行…"
+              rows={1}
               disabled={loading}
             />
-            <Button type="primary" icon={<SendOutlined />} loading={loading} onClick={handleSend} style={{ height: 'auto' }}>
-              发送
-            </Button>
+            <button
+              className="send-btn ant-btn ant-btn-primary"
+              onClick={handleSend}
+              disabled={loading || !input.trim()}
+              style={{ border: 'none', cursor: loading || !input.trim() ? 'not-allowed' : 'pointer' }}
+            >
+              ↑
+            </button>
           </div>
+          <div className="chat-hint">Enter 发送 · Shift+Enter 换行</div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }
