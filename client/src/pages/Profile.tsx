@@ -1,77 +1,183 @@
-import React, { useState } from 'react'
-import { Card, Form, Input, Button, Avatar, message, Upload } from 'antd'
-import { UserOutlined, CameraOutlined } from '@ant-design/icons'
+import React, { useState, useEffect } from 'react'
+import { userApi } from '../api'
 import { useUserStore } from '../store/userStore'
 
 const Profile: React.FC = () => {
-  const { user } = useUserStore()
-  const [loading, setLoading] = useState(false)
-  const [form] = Form.useForm()
+  const { user, setUser, token, logout } = useUserStore()
+  const userId = user?.id ? Number(user.id) : 0
+  const initial = user?.username?.charAt(0).toUpperCase() ?? 'U'
 
-  const handleUpdate = async (_values: any) => {
+  const [username, setUsername] = useState(user?.username ?? '')
+  const [email, setEmail] = useState(user?.email ?? '')
+  const [password, setPassword] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatar ?? '')
+
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  // 加载最新用户信息 POST /user/show/{id}
+  useEffect(() => {
+    const load = async () => {
+      if (!userId) return
+      try {
+        const res: any = await userApi.show(userId)
+        if (res.code === 1 && res.data) {
+          const d = res.data
+          setUsername(d.username ?? username)
+          setEmail(d.email ?? '')
+          setAvatarUrl(d.avatarImageUrl ?? '')
+          // 同步 store
+          setUser(
+            {
+              id: user?.id,
+              username: d.username ?? user?.username,
+              email: d.email,
+              avatar: d.avatarImageUrl,
+            },
+            token!
+          )
+        }
+      } catch { /* 忽略加载失败 */ }
+    }
+    load()
+  }, [userId])
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
     setLoading(true)
+
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      message.success('个人信息更新成功')
-    } catch (error) {
-      message.error('更新失败')
+      // POST /user/update  body: { userId, username, password, email, avatarImageUrl }
+      const payload: any = { userId, username }
+      if (email) payload.email = email
+      if (password) payload.password = password
+      if (avatarUrl) payload.avatarImageUrl = avatarUrl
+
+      const res: any = await userApi.update(payload)
+      if (res.code === 1) {
+        setSuccess('信息已保存')
+        setPassword('')
+        // 同步 store 中的用户名
+        setUser({ id: user?.id, username, email, avatar: avatarUrl }, token!)
+      } else {
+        setError(res.msg ?? '保存失败')
+      }
+    } catch (err: any) {
+      setError(err?.msg ?? '网络错误，请稍后重试')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto' }}>
-      <Card title="👤 个人中心">
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <Upload showUploadList={false} beforeUpload={() => false}>
-            <Avatar size={120} icon={<UserOutlined />} src={user?.avatar}>
-              {user?.username?.charAt(0).toUpperCase()}
-            </Avatar>
-            <div style={{ marginTop: 8, cursor: 'pointer' }}>
-              <CameraOutlined /> 更换头像
-            </div>
-          </Upload>
-          <h2 style={{ marginTop: 16 }}>{user?.username}</h2>
-          <p style={{ color: '#666' }}>{user?.email}</p>
+    <div className="profile-page">
+      {/* Avatar Block */}
+      <div className="profile-avatar-block">
+        <div className="profile-avatar">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="avatar" />
+          ) : (
+            <span>{initial}</span>
+          )}
         </div>
+        <div className="profile-username">{user?.username}</div>
+        {user?.email && <div className="profile-email">{user.email}</div>}
+      </div>
 
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            username: user?.username,
-            email: user?.email,
+      {/* Form */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)', padding: '28px 28px 24px',
+      }}>
+        <form className="profile-form" onSubmit={handleSave}>
+          <div className="form-group">
+            <label className="form-label">用户名</label>
+            <input
+              className="form-input"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="请输入用户名"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">邮箱</label>
+            <input
+              className="form-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="选填"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">头像 URL</label>
+            <input
+              className="form-input"
+              type="text"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="头像图片 URL（选填）"
+              disabled={loading}
+            />
+          </div>
+
+          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+
+          <div className="form-group">
+            <label className="form-label">新密码</label>
+            <input
+              className="form-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="不修改请留空"
+              autoComplete="new-password"
+              disabled={loading}
+            />
+          </div>
+
+          {error && (
+            <div style={{ fontSize: 13, color: '#dc2626', padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}>
+              {error}
+            </div>
+          )}
+          {success && (
+            <div style={{ fontSize: 13, color: '#16a34a', padding: '8px 12px', background: '#f0fdf4', borderRadius: 6 }}>
+              {success}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="login-submit"
+            style={{ height: 44 }}
+            disabled={loading}
+          >
+            {loading ? '保存中…' : '保存修改'}
+          </button>
+        </form>
+      </div>
+
+      {/* Logout */}
+      <div style={{ marginTop: 16, textAlign: 'center' }}>
+        <button
+          onClick={() => logout()}
+          style={{
+            background: 'none', border: 'none', fontSize: 13,
+            color: 'var(--text-mute)', cursor: 'pointer', textDecoration: 'underline',
           }}
-          onFinish={handleUpdate}
         >
-          <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-            <Input size="large" />
-          </Form.Item>
-
-          <Form.Item name="email" label="邮箱" rules={[{ type: 'email' }]}>
-            <Input size="large" placeholder="选填" />
-          </Form.Item>
-
-          <Form.Item name="oldPassword" label="当前密码">
-            <Input.Password size="large" />
-          </Form.Item>
-
-          <Form.Item name="newPassword" label="新密码">
-            <Input.Password size="large" placeholder="不修改请留空" />
-          </Form.Item>
-
-          <Form.Item name="confirmPassword" label="确认新密码">
-            <Input.Password size="large" />
-          </Form.Item>
-
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block size="large">
-              保存修改
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+          退出登录
+        </button>
+      </div>
     </div>
   )
 }

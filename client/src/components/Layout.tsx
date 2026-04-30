@@ -1,114 +1,81 @@
-import React, { useState } from 'react'
-import { Layout as AntLayout, Menu, Avatar, Dropdown, message } from 'antd'
+import React from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import {
-  MessageOutlined,
-  PictureOutlined,
-  RiseOutlined,
-  EnvironmentOutlined,
-  UserOutlined,
-  LogoutOutlined,
-} from '@ant-design/icons'
 import { useUserStore } from '../store/userStore'
 
-const { Header, Sider, Content } = AntLayout
-
-const menuItems = [
-  {
-    key: '/chat',
-    icon: <MessageOutlined />,
-    label: 'AI 对话',
-  },
-  {
-    key: '/image',
-    icon: <PictureOutlined />,
-    label: 'AI 画图',
-  },
-  {
-    key: '/steps',
-    icon: <RiseOutlined />,
-    label: '步数排名',
-  },
-  {
-    key: '/track',
-    icon: <EnvironmentOutlined />,
-    label: '运动轨迹',
-  },
-  {
-    key: '/profile',
-    icon: <UserOutlined />,
-    label: '个人中心',
-  },
+const navItems = [
+  { path: '/chat',    icon: '💬', label: 'AI 对话' },
+  { path: '/image',   icon: '🎨', label: 'AI 画图' },
+  { path: '/steps',   icon: '👟', label: '步数排名' },
+  { path: '/track',   icon: '🗺️',  label: '运动轨迹' },
+  { path: '/profile', icon: '👤', label: '个人中心' },
 ]
+
+const pageTitles: Record<string, string> = {
+  '/chat':    'AI 对话',
+  '/image':   'AI 画图',
+  '/steps':   '步数排名',
+  '/track':   '运动轨迹',
+  '/profile': '个人中心',
+}
 
 const Layout: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout } = useUserStore()
-  const [collapsed, setCollapsed] = useState(false)
-
-  const handleMenuClick = ({ key }: { key: string }) => {
-    navigate(key)
-  }
 
   const handleLogout = () => {
     logout()
-    message.success('退出登录成功')
     navigate('/login')
   }
 
-  const userMenuItems = [
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: '退出登录',
-      onClick: handleLogout,
-    },
-  ]
+  const initial = user?.username?.charAt(0).toUpperCase() ?? 'U'
 
   return (
-    <AntLayout style={{ minHeight: '100vh' }}>
-      <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} theme="dark">
-        <div style={{
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#fff',
-          fontSize: collapsed ? 14 : 18,
-          fontWeight: 'bold',
-        }}>
-          {collapsed ? '🏃' : '🏃‍♂️ Race 运动'}
+    <div className="app-layout">
+      {/* ── Sidebar ── */}
+      <aside className="app-sidebar">
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-mark">
+            <div className="sidebar-logo-icon">R</div>
+            <span className="sidebar-logo-text">Race 运动</span>
+          </div>
         </div>
-        <Menu
-          theme="dark"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          onClick={handleMenuClick}
-        />
-      </Sider>
-      <AntLayout>
-        <Header style={{
-          background: '#fff',
-          padding: '0 24px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          boxShadow: '0 1px 4px rgba(0,21,41,.08)',
-        }}>
-          <h2 style={{ margin: 0 }}>运动竞赛系统</h2>
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Avatar icon={<UserOutlined />} src={user?.avatar} />
-              <span>{user?.username}</span>
+
+        <nav className="sidebar-nav">
+          {navItems.map((item) => (
+            <div
+              key={item.path}
+              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+              onClick={() => navigate(item.path)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
             </div>
-          </Dropdown>
-        </Header>
-        <Content style={{ margin: '24px', overflow: 'auto' }}>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="user-area" onClick={handleLogout} title="点击退出登录">
+            <div className="user-avatar">{initial}</div>
+            <div className="user-info">
+              <div className="user-name">{user?.username ?? '用户'}</div>
+              <div className="user-role">点击退出登录</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ── Main ── */}
+      <div className="app-main">
+        <header className="app-header">
+          <span className="page-title">{pageTitles[location.pathname] ?? ''}</span>
+        </header>
+
+        <div className="app-content">
           <Outlet />
-        </Content>
-      </AntLayout>
-    </AntLayout>
+        </div>
+      </div>
+    </div>
   )
 }
 
