@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.server.mapper.ImageLink">
+
+    <delete id="delete">
+        delete from imagelink
+        where session_id in
+        <foreach collection="list" item="sessionId" open="(" separator="," close=")">
+            #{sessionId}
+        </foreach>
+    </delete>
+</mapper>

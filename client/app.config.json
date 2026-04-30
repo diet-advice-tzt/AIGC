@@ -1,0 +1,21 @@
+{
+  "name": "race-app",
+  "main_server_url": "http://localhost:8080",
+  "capacitor": {
+    "appId": "com.race.app",
+    "appName": "Race 运动竞赛",
+    "platforms": ["android", "ios"]
+  },
+  "tauri": {
+    "identifier": "com.race.app",
+    "windows": ["exe", "msi"],
+    "mac": ["dmg", "app"],
+    "linux": ["deb", "appimage"]
+  },
+  "build": {
+    "web": "npm run build",
+    "android": "npm run build && npm run cap:android && npm run cap:open:android",
+    "ios": "npm run build && npm run cap:ios && npm run cap:open:ios",
+    "desktop": "npm run tauri:build"
+  }
+}

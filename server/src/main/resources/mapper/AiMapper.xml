@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.server.mapper.AiMapper">
+    <insert id="insertNewUser">
+        insert into raceuser
+            (username, email, count, password, login_time, logout_time, updated_at) values (#{username}, #{email}, #{count}, #{password}, #{loginTime}, #{logoutTime}, #{updatedAt})
+    </insert>
+    <insert id="insertNewSteps">
+        insert into user_steps
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId!=null and userId!='' ">
+                user_id,
+            </if>
+            <if test="steps!=null and steps!='' ">
+                steps,
+            </if>
+            <if test="stepDate!=null">
+                step_date,
+            </if>
+            <if test="rank!=null and rank!='' ">
+                rank,
+            </if>
+            <if test="threadId!=null and threadId!='' ">
+                thread_id,
+            </if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId!=null and userId!='' ">
+                #{userId},
+            </if>
+            <if test="steps!=null and steps!='' ">
+                #{steps},
+            </if>
+            <if test="stepDate!=null">
+                #{stepDate},
+            </if>
+            <if test="rank!=null and rank!='' ">
+                #{rank},
+            </if>
+            <if test="threadId!=null and threadId!='' ">
+                #{threadId},
+            </if>
+        </trim>
+    </insert>
+    <insert id="insertNewTrack">
+        insert into user_track (track_id, latitude, longitude,  record_time, total_distance, created_at, user_id)
+        values (#{trackId}, #{latitude}, #{longitude}, #{recordTime}, #{totalDistance}, #{createdAt}, #{userId})
+    </insert>
+    <update id="update">
+       update raceuser
+        <set>
+            <if test="username!=null and username!='' ">
+                username= #{username},
+            </if>
+            <if test="password!=null and password!='' ">
+                password= #{password},
+            </if>
+            <if test="email!=null and email!='' ">
+                email= #{email},
+            </if>
+            <if test="avatarImageUrl!=null and avatarImageUrl!='' ">
+                avatar_image_url= #{avatarImageUrl},
+            </if>
+        </set>
+        where id=#{userId}
+    </update>
+    <update id="stepBatch">
+        update user_steps
+        <set>
+            <if test="steps!=null and steps!='' ">
+                steps= #{steps},
+            </if>
+            <if test="stepDate!=null">
+                step_date= #{stepDate},
+            </if>
+            <if test="rank!=null and rank!='' ">
+                rank= #{rank},
+            </if>
+            <if test="threadId!=null and threadId!='' ">
+                 thread_id= #{threadId}
+            </if>
+        </set>
+        <where>
+            <if test="userId!=null and userId!='' ">
+                and user_id= #{userId}
+            </if>
+        </where>
+    </update>
+
+    <select id="login" resultType="org.example.pojo.entity.user">
+        select * from raceuser <where>
+        <if test="username!=null and username!='' ">
+             username=#{username}
+        </if>
+        <if test="password!=null and password!='' ">
+            and password=#{password}
+        </if>
+        <if test="email!=null and email!= '' ">
+            and email=#{email}
+        </if>
+    </where>
+    </select>
+    <select id="selectAllChatRecord" resultType="org.example.pojo.VO.AllRecordVO">
+        SELECT
+        c.content,
+        c.created_at AS createdAt,  <!-- 确保Java属性名匹配 -->
+        c.updated_at AS updatedAt,
+        d.username
+        FROM
+        chatrecord c
+        LEFT JOIN raceuser d ON d.id = c.user_id
+        <where>
+            <if test="sessionId != null and sessionId != ''">
+                c.session_id = #{sessionId}
+            </if>
+            <if test="userId != null and userId != ''">
+                AND d.id = #{userId}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectAllImage" resultType="org.example.pojo.VO.AllImageRecordVO">
+        SELECT
+        c.image_url,
+        c.created_at AS createdAt,
+        c.updated_at AS updatedAt,
+        d.username
+        FROM
+        imagelink c
+        LEFT JOIN raceuser d ON d.id = c.user_id
+        <where>
+            <if test="sessionId != null and sessionId != ''">
+                c.session_id = #{sessionId}
+            </if>
+            <if test="userId != null and userId != ''">
+                AND d.id = #{userId}
+            </if>
+        </where>
+    </select>
+    <select id="steps" resultType="org.example.pojo.VO.DailyStepsVO">
+        select * from sky_take_out.usersteps <where>
+        <if test="userId!=null and userId!='' ">
+            and user_id= #{userId}
+        </if>
+        <if test="date!=null ">
+            and step_date= #{date}
+        </if>
+        <if test="rank!=null ">
+            and rank= #{rank}
+        </if>
+        <if test="steps!=null ">
+            and steps= #{steps}
+        </if>
+        <if test="aiEvaluation!=null ">
+            and ai_evaluation= #{aiEvaluation}
+        </if>
+        </where>
+    </select>
+    <select id="getTrack" resultType="org.example.pojo.entity.Track">
+        select track_id, latitude, longitude,  record_time, total_distance, created_at, user_id
+        from sky_take_out.track
+        where track_id = #{trackId}
+    </select>
+
+
+</mapper>
+<!--
+        一、location字段的常见使用场景
+        地理空间查询（核心场景）
+        附近搜索（半径查询）：例如查找用户周边 5 公里内的餐厅、加油站。
+        区域筛选：判断坐标是否在某个多边形区域内（如商圈、行政区边界）。
+        路径规划：计算两个坐标点之间的距离、行驶路线（需结合地图 API）。
+        示例：
+        sql
+        &#45;&#45; 查询距离坐标点(30.123, 120.123) 2公里内的所有POI
+        SELECT * FROM places
+        WHERE ST_DWithin(location, ST_Point(30.123, 120.123), 2000); &#45;&#45; ST_DWithin为空间距离函数
+
+        轨迹分析与存储
+        存储连续的移动轨迹（如车辆、用户步行路径），支持轨迹抽稀、聚合分析（如热点区域统计）。
+        结合时间戳，分析轨迹的停留点、移动速度等。
+        空间数据建模
+        存储复杂几何形状：如多边形（行政区边界）、线（道路、河流）、地理围栏等。
+        用于 GIS（地理信息系统）相关业务，如地图渲染、空间数据可视化。
+        数据完整性与校验
+        强制要求坐标符合地理规范（如纬度范围 [-90, 90]，经度范围 [-180, 180]），避免无效数据。
+        二、location字段存在的核心意义
+        1. 优化空间查询性能
+        空间索引：传统数据库对lat和lng字段做联合索引，无法高效支持半径查询、几何关系判断（如包含、相交）。
+        原生支持：空间数据类型（如 PostGIS 的GEOMETRY、MySQL 的POINT）支持空间索引（如 R-Tree），可将查询性能提升数倍甚至数十倍。
+        2. 简化复杂地理计算
+        数据库内置空间函数，可直接计算距离、面积、几何变换等，避免在应用层手动实现复杂算法（如 Haversine 公式计算球面距离）。-->

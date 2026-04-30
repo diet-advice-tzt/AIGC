@@ -1,0 +1,29 @@
+# 后端环境变量配置
+# 请复制此文件为 application-dev.yml 并填入真实配置
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:sky_take_out}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:your_password}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+
+race:
+  deepseek:
+    api-key: ${DEEPSEEK_API_KEY:your_api_key}
+    api-key1: ${DEEPSEEK_API_KEY1:your_api_key}
+  alioss:
+    endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    access-key-id: ${OSS_ACCESS_KEY:your_access_key}
+    access-key-secret: ${OSS_SECRET_KEY:your_secret_key}
+    bucket-name: ${OSS_BUCKET:your_bucket}
+
+jwt:
+  user-secret-key: ${JWT_SECRET:your_jwt_secret_key}
+  user-ttl: 7200000
+  user-token-name: token

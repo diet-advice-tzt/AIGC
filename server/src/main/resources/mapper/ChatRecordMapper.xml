@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.server.mapper.ChatRecordMapper">
+
+    <insert id="insertNewRecord">
+        insert into chatrecord (content,created_at,updated_at,user_id,session_id, thread_id) values (#{content},#{createdAt},#{updatedAt},#{userId},#{sessionId},#{ threadId});
+    </insert>
+    <delete id="delete">
+      delete from chatrecord
+      where session_id in
+      <foreach collection="list" item="sessionId" open="(" separator="," close=")">
+          #{sessionId}
+      </foreach>
+    </delete>
+</mapper>

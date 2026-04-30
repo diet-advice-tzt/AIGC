@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="org.example.server.mapper.SessionMapper">
+
+
+    <insert id="insertSessionId">
+        insert into session (user_id,session_key,created_at,thread_id) values (#{userId},#{sessionKey},#{createdAt},#{threadId})
+    </insert>
+    <delete id="delete">
+            DELETE FROM session
+            WHERE id IN (
+            SELECT id FROM (
+            SELECT id,
+            ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn
+            FROM session
+            ) t
+            WHERE t.rn &lt;= 5
+            )
+    </delete>
+    <select id="selectSessionId" resultType="java.lang.String">
+        select session_key from session <where>
+        <if test="userId!=null and userId!='' ">
+          user_id=#{userId}
+        </if>
+    </where>
+    </select>
+    <select id="selectAllDeleteSession" resultType="org.example.pojo.entity.session">
+        select * from session
+        WHERE id IN (
+            SELECT id FROM (
+                               SELECT id,
+                                      ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at DESC) AS rn
+                               FROM session
+                           ) t
+            WHERE t.rn &lt;= 5
+        )
+    </select>
+</mapper>
