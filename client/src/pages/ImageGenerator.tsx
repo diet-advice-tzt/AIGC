@@ -1,15 +1,17 @@
 import React, { useState } from 'react'
 import { imageApi } from '../api'
 import { useUserStore } from '../store/userStore'
+import { MOCK_IMAGES, MOCK_TOKEN } from '../mock'
 
 const ImageGenerator: React.FC = () => {
-  const { user } = useUserStore()
+  const { user, token } = useUserStore()
   const userId = String(user?.id ?? '')
   const sessionId = String((user as any)?.sessionId ?? '')
+  const useMock = token === MOCK_TOKEN
 
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
-  const [images, setImages] = useState<string[]>([])
+  const [images, setImages] = useState<string[]>(useMock ? [...MOCK_IMAGES] : [])
   const [error, setError] = useState('')
 
   const handleGenerate = async () => {
@@ -20,6 +22,18 @@ const ImageGenerator: React.FC = () => {
     }
     setError('')
     setLoading(true)
+
+    if (useMock) {
+      // mock 模式：模拟 1s 生成延迟，返回随机占位图
+      await new Promise((r) => setTimeout(r, 1000))
+      const seed = encodeURIComponent(text.slice(0, 10)) + Date.now()
+      const mockUrl = `https://picsum.photos/seed/${seed}/400/400`
+      setImages((prev) => [mockUrl, ...prev])
+      setPrompt('')
+      setLoading(false)
+      return
+    }
+
     try {
       // POST /user/picture  body: { picture, userId, sessionId }
       // 后端返回 Result<String>，data 直接是图片 URL
@@ -43,6 +57,15 @@ const ImageGenerator: React.FC = () => {
 
   return (
     <div className="image-page">
+      {useMock && (
+        <div style={{
+          padding: '8px 14px', background: '#fef3c7', border: '1px solid #fcd34d',
+          borderRadius: 8, fontSize: 12, color: '#92400e', marginBottom: 4,
+        }}>
+          演示模式 — 图片生成将返回随机占位图，启动后端后刷新即可切换为 AI 真实生成
+        </div>
+      )}
+
       {/* Prompt Area */}
       <div className="image-prompt-card">
         <div className="image-prompt-label">描述你想要的图片</div>

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { chatApi } from '../api'
 import { useUserStore } from '../store/userStore'
+import { MOCK_SESSIONS, MOCK_MESSAGES, getMockAiReply, MOCK_TOKEN } from '../mock'
 
 interface Message {
   id: string
@@ -18,10 +19,14 @@ interface Session {
 const fmt = (iso: string) =>
   new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
+// mock 模式：token 是 mock token 时使用本地数据
+const isMock = (token: string | null) => token === MOCK_TOKEN
+
 const Chat: React.FC = () => {
-  const { user } = useUserStore()
+  const { user, token } = useUserStore()
   const userId = String(user?.id ?? '')
   const initial = user?.username?.charAt(0).toUpperCase() ?? 'U'
+  const useMock = isMock(token)
 
   const [sessions, setSessions] = useState<Session[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string>('')
@@ -37,13 +42,17 @@ const Chat: React.FC = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // 加载历史记录（返回的是 queryRecord，是 List<Map>）
+  // 加载历史记录
   const loadHistory = useCallback(async (_sid: string) => {
+    if (useMock) {
+      const msgs = MOCK_MESSAGES[_sid] ?? []
+      setMessages(msgs.map((m) => ({ ...m })))
+      return
+    }
     if (!userId) return
     try {
       const res: any = await chatApi.getHistory(userId)
       if (res.code === 1 && Array.isArray(res.data)) {
-        // 后端返回 Map 列表，每条 map 的 key 视后端实现而定，尝试常见字段
         const mapped: Message[] = res.data.map((item: any, i: number) => ({
           id: String(i),
           content: item.content ?? item.question ?? item.Respond ?? JSON.stringify(item),
@@ -55,15 +64,35 @@ const Chat: React.FC = () => {
     } catch {
       // 查询历史失败时不影响使用
     }
-  }, [userId])
+  }, [userId, useMock])
 
   // 首次进入：创建新会话
   useEffect(() => {
+    if (useMock) {
+      // mock 模式：直接加载演示会话
+      setSessions(MOCK_SESSIONS.map((s) => ({ ...s })))
+      setCurrentSessionId(MOCK_SESSIONS[0].sessionId)
+      const msgs = MOCK_MESSAGES[MOCK_SESSIONS[0].sessionId] ?? []
+      setMessages(msgs.map((m) => ({ ...m })))
+      return
+    }
     if (!userId) return
     handleNewSession()
-  }, [userId])
+  }, [userId, useMock])
 
   const handleNewSession = async () => {
+    if (useMock) {
+      const newSid = `mock-s-${Date.now()}`
+      const newSession: Session = {
+        sessionId: newSid,
+        label: `对话 ${sessions.length + 1}`,
+        createdAt: new Date().toISOString(),
+      }
+      setSessions((prev) => [newSession, ...prev])
+      setCurrentSessionId(newSid)
+      setMessages([])
+      return
+    }
     if (!userId) return
     try {
       const res: any = await chatApi.newSession(userId)
@@ -100,6 +129,20 @@ const Chat: React.FC = () => {
     // 重置 textarea 高度
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
+    }
+
+    if (useMock) {
+      // mock 模式：模拟 600ms 延迟后返回本地回复
+      await new Promise((r) => setTimeout(r, 600))
+      const aiMsg: Message = {
+        id: Date.now().toString() + 'ai',
+        content: getMockAiReply(text),
+        role: 'assistant',
+        time: new Date().toISOString(),
+      }
+      setMessages((prev) => [...prev, aiMsg])
+      setLoading(false)
+      return
     }
 
     try {
@@ -147,7 +190,6 @@ const Chat: React.FC = () => {
 
   const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
-    // 自动撑高
     e.target.style.height = 'auto'
     e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
   }
@@ -193,6 +235,14 @@ const Chat: React.FC = () => {
 
       {/* Chat Main */}
       <div className="chat-main">
+        {useMock && (
+          <div style={{
+            padding: '6px 16px', background: '#fef3c7', borderBottom: '1px solid #fcd34d',
+            fontSize: 12, color: '#92400e', textAlign: 'center',
+          }}>
+            演示模式 — 当前展示的是 mock 数据，启动后端后刷新即可切换为真实数据
+          </div>
+        )}
         <div className="chat-messages-area">
           {messages.length === 0 && !loading ? (
             <div className="chat-empty">
@@ -207,7 +257,7 @@ const Chat: React.FC = () => {
                   {msg.role === 'assistant' ? 'AI' : initial}
                 </div>
                 <div>
-                  <div className="msg-bubble">{msg.content}</div>
+                  <div className="msg-bubble" style={{ whiteSpace: 'pre-line' }}>{msg.content}</div>
                   <div className="msg-time">{fmt(msg.time)}</div>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authApi, checkBackendHealth } from '../api'
 import { useUserStore } from '../store/userStore'
+import { MOCK_USER, MOCK_TOKEN } from '../mock'
 
 type Tab = 'login' | 'register'
 
@@ -85,6 +86,12 @@ const Login: React.FC = () => {
     }
   }
 
+  // 演示模式：不需要后端，直接用 mock 数据登录
+  const handleDemoLogin = () => {
+    setUser(MOCK_USER as any, MOCK_TOKEN)
+    navigate('/chat')
+  }
+
   const switchTab = (t: Tab) => {
     setTab(t)
     setError('')
@@ -108,7 +115,7 @@ const Login: React.FC = () => {
     return (
       <div className="backend-status offline">
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#dc2626', display: 'inline-block', marginRight: 6 }} />
-        后端未启动 — 请启动 ServerApplication.java
+        后端未启动 — 可使用「演示模式」预览 UI
       </div>
     )
   })()
@@ -166,6 +173,29 @@ const Login: React.FC = () => {
           </div>
 
           {statusEl}
+
+          {/* 演示模式入口 */}
+          {backendOnline === false && (
+            <button
+              type="button"
+              onClick={handleDemoLogin}
+              style={{
+                width: '100%',
+                padding: '11px 0',
+                marginBottom: 16,
+                borderRadius: 8,
+                border: '1.5px dashed var(--accent)',
+                background: 'var(--accent-bg)',
+                color: 'var(--accent)',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                letterSpacing: '0.02em',
+              }}
+            >
+              🚀 演示模式（无需后端）
+            </button>
+          )}
 
           <div className="login-tab-bar">
             <div className={`login-tab ${tab === 'login' ? 'active' : ''}`} onClick={() => switchTab('login')}>登录</div>

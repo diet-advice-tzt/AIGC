@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { stepsApi } from '../api'
 import { useUserStore } from '../store/userStore'
+import { MOCK_DAILY_STEPS, MOCK_TOKEN } from '../mock'
 import dayjs from 'dayjs'
 
 interface DailySteps {
@@ -13,8 +14,9 @@ interface DailySteps {
 const TARGET = 10000
 
 const Steps: React.FC = () => {
-  const { user } = useUserStore()
+  const { user, token } = useUserStore()
   const userId = user?.id ? Number(user.id) : 0
+  const useMock = token === MOCK_TOKEN
 
   const [dailyData, setDailyData] = useState<DailySteps | null>(null)
   const [inputSteps, setInputSteps] = useState('')
@@ -26,9 +28,13 @@ const Steps: React.FC = () => {
   const today = dayjs().format('YYYY-MM-DD')
 
   const loadDailySteps = async () => {
+    if (useMock) {
+      setDailyData(MOCK_DAILY_STEPS as DailySteps)
+      setLoadingData(false)
+      return
+    }
     if (!userId) return
     try {
-      // GET /user/steps/daily?userId=&date=
       const res: any = await stepsApi.getDailySteps(userId, today)
       if (res.code === 1 && res.data) {
         setDailyData(res.data)
@@ -40,11 +46,9 @@ const Steps: React.FC = () => {
     }
   }
 
-  // 后端没有专门的排名列表接口，getDailySteps 返回的 rank 字段是当前用户排名
-  // 排行榜用同一接口（模式：只展示自己当天排名信息）
   useEffect(() => {
     loadDailySteps()
-  }, [userId])
+  }, [userId, useMock])
 
   const handleUpload = async () => {
     const steps = parseInt(inputSteps, 10)
@@ -55,8 +59,17 @@ const Steps: React.FC = () => {
     setError('')
     setSuccessMsg('')
     setUploading(true)
+
+    if (useMock) {
+      await new Promise((r) => setTimeout(r, 400))
+      setDailyData((prev) => prev ? { ...prev, steps, aiEvaluation: `已上传 ${steps.toLocaleString()} 步，很棒！继续保持这个节奏。` } : { date: today, steps, rank: 1, aiEvaluation: '步数上传成功！' })
+      setSuccessMsg('步数上传成功！（演示模式）')
+      setInputSteps('')
+      setUploading(false)
+      return
+    }
+
     try {
-      // POST /user/steps/batch  body: { userId, stepDate, steps }
       const res: any = await stepsApi.uploadSteps({
         userId,
         stepDate: today,
@@ -85,6 +98,15 @@ const Steps: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {useMock && (
+        <div style={{
+          padding: '8px 14px', background: '#fef3c7', border: '1px solid #fcd34d',
+          borderRadius: 8, fontSize: 12, color: '#92400e',
+        }}>
+          演示模式 — 当前展示的是 mock 数据，启动后端后刷新即可切换为真实数据
+        </div>
+      )}
 
       {/* ── 今日步数卡片 ── */}
       <div style={{

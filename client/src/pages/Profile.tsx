@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { userApi } from '../api'
 import { useUserStore } from '../store/userStore'
+import { MOCK_TOKEN } from '../mock'
 
 const Profile: React.FC = () => {
   const { user, setUser, token, logout } = useUserStore()
   const userId = user?.id ? Number(user.id) : 0
   const initial = user?.username?.charAt(0).toUpperCase() ?? 'U'
+  const useMock = token === MOCK_TOKEN
 
   const [username, setUsername] = useState(user?.username ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
@@ -18,6 +20,10 @@ const Profile: React.FC = () => {
 
   // 加载最新用户信息 POST /user/show/{id}
   useEffect(() => {
+    if (useMock) {
+      // mock 模式：直接使用 store 中的数据，无需请求后端
+      return
+    }
     const load = async () => {
       if (!userId) return
       try {
@@ -27,7 +33,6 @@ const Profile: React.FC = () => {
           setUsername(d.username ?? username)
           setEmail(d.email ?? '')
           setAvatarUrl(d.avatarImageUrl ?? '')
-          // 同步 store
           setUser(
             {
               id: user?.id,
@@ -41,7 +46,7 @@ const Profile: React.FC = () => {
       } catch { /* 忽略加载失败 */ }
     }
     load()
-  }, [userId])
+  }, [userId, useMock])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,8 +54,16 @@ const Profile: React.FC = () => {
     setSuccess('')
     setLoading(true)
 
+    if (useMock) {
+      await new Promise((r) => setTimeout(r, 400))
+      setUser({ id: user?.id, username, email, avatar: avatarUrl }, token!)
+      setSuccess('信息已保存（演示模式）')
+      setPassword('')
+      setLoading(false)
+      return
+    }
+
     try {
-      // POST /user/update  body: { userId, username, password, email, avatarImageUrl }
       const payload: any = { userId, username }
       if (email) payload.email = email
       if (password) payload.password = password
@@ -60,7 +73,6 @@ const Profile: React.FC = () => {
       if (res.code === 1) {
         setSuccess('信息已保存')
         setPassword('')
-        // 同步 store 中的用户名
         setUser({ id: user?.id, username, email, avatar: avatarUrl }, token!)
       } else {
         setError(res.msg ?? '保存失败')
@@ -74,6 +86,15 @@ const Profile: React.FC = () => {
 
   return (
     <div className="profile-page">
+      {useMock && (
+        <div style={{
+          padding: '8px 14px', background: '#fef3c7', border: '1px solid #fcd34d',
+          borderRadius: 8, fontSize: 12, color: '#92400e', marginBottom: 8,
+        }}>
+          演示模式 — 当前为 Demo 账号，修改信息不会真实保存到后端
+        </div>
+      )}
+
       {/* Avatar Block */}
       <div className="profile-avatar-block">
         <div className="profile-avatar">
