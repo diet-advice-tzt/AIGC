@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  backend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "cd /app && npm install && node server.js"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./node-server:/app
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - CORS_ORIGIN=*
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./client/dist:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - backend
